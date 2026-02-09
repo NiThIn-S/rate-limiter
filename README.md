@@ -1,4 +1,4 @@
-# Rate Limiter API — Backend only (no Redis, no Docker)
+# Rate Limiter API — Backend only (no redis DB)
 
 Run the FastAPI backend locally with **in-memory** rate limiting. No Redis or Docker required.
 
@@ -33,7 +33,7 @@ pip install -e .
 
 ### 3. (Optional) Environment variables
 
-Create a `backend/.env` or export variables. For backend-only with in-memory rate limiting you don’t need Redis. Defaults are enough to run:
+Create a `backend/.env` or export variables. Defaults are enough to run:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -42,11 +42,6 @@ Create a `backend/.env` or export variables. For backend-only with in-memory rat
 | `RATE_LIMIT_WINDOW` | 60 | Window length (seconds) |
 | `RATE_LIMIT_BACKEND` | memory | Use `memory` (no Redis) or `redis` |
 
-To force in-memory (no Redis):
-
-```bash
-export RATE_LIMIT_BACKEND=memory
-```
 
 ## Run the backend
 
@@ -54,12 +49,6 @@ From the **backend** directory:
 
 ```bash
 uv run python main.py
-```
-
-Or with **gunicorn** (multiple workers; each worker has its own in-memory limit):
-
-```bash
-uv run gunicorn run_main:Application
 ```
 
 Server will be at **http://0.0.0.0:8000** (or the port you set).
@@ -96,5 +85,3 @@ You should see `status=200` until the limit is hit, then `status=429`.
 | Install deps | `cd backend && uv sync` |
 | Start backend | `uv run python main.py` |
 | Test | From repo root: `./test_api.sh` |
-
-No Redis or Docker Compose required when using `RATE_LIMIT_BACKEND=memory` (default).
