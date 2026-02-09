@@ -1,48 +1,70 @@
-# Rate Limiter API
+# Rate Limiter API — Backend only (no Redis, no Docker)
 
-FastAPI backend with Redis-backed rate limiting. Requests are limited per API key within a configurable window.
+Run the FastAPI backend locally with **in-memory** rate limiting. No Redis or Docker required.
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/) and Docker Compose
-- (Optional) Bash, for running the test script
+- **Python 3.12+**
+- [uv](https://docs.astral.sh/uv/) (or use `pip` and a venv)
 
 ## Setup
 
-### 1. Environment variables
-
-Create a `.env` file in the **project root** (same directory as `docker-compose.yml`):
-
-```env
-REDIS_PASSWORD=your_redis_password
-# Optional:
-# REDIS_USERNAME=
-# ENV=dev
-# LOG_LEVEL=INFO
-```
-
-`REDIS_PASSWORD` is required when using Docker Compose so Redis starts with authentication.
-
-### 2. Start services
-
-From the project root:
+### 1. Go to the backend directory
 
 ```bash
-docker compose up -d
+cd backend
 ```
 
-This starts:
+### 2. Install dependencies
 
-- **Redis** on port `6380` (host) → `6379` (container), with optional password
-- **Backend** on port `8000`, waiting for Redis to be healthy
-
-Check that both are running:
+With **uv** (recommended):
 
 ```bash
-docker compose ps
+uv sync
 ```
 
-### 3. Verify the API
+With **pip**:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e .
+```
+
+### 3. (Optional) Environment variables
+
+Create a `backend/.env` or export variables. For backend-only with in-memory rate limiting you don’t need Redis. Defaults are enough to run:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | 8000 | Server port |
+| `RATE_LIMIT_REQUESTS` | 60 | Max requests per window |
+| `RATE_LIMIT_WINDOW` | 60 | Window length (seconds) |
+| `RATE_LIMIT_BACKEND` | memory | Use `memory` (no Redis) or `redis` |
+
+To force in-memory (no Redis):
+
+```bash
+export RATE_LIMIT_BACKEND=memory
+```
+
+## Run the backend
+
+From the **backend** directory:
+
+```bash
+uv run python main.py
+```
+
+Or with **gunicorn** (multiple workers; each worker has its own in-memory limit):
+
+```bash
+uv run gunicorn run_main:Application
+```
+
+Server will be at **http://0.0.0.0:8000** (or the port you set).
+
+### Quick check
 
 ```bash
 curl -s -X GET 'http://0.0.0.0:8000/api/test/' \
@@ -50,60 +72,29 @@ curl -s -X GET 'http://0.0.0.0:8000/api/test/' \
   -H 'x-api-key: 123'
 ```
 
-You should get a JSON response (e.g. `{"message":"ok"}` or similar).
+## Run the rate-limit test
 
-## Running the rate-limit test
-
-Use the included shell script to send many requests in a loop and observe rate limiting (e.g. 429 responses after the limit is hit).
-
-**From the project root:**
+From the **project root** (parent of `backend/`):
 
 ```bash
 ./test_api.sh
 ```
 
-- **Default:** 120 requests to `http://0.0.0.0:8000/api/test/` with a 1-second delay between requests (matches Docker Compose).
-- **Custom URL and count:**
+- Default: 120 requests to `http://0.0.0.0:8000/api/test/` with 1s delay.
+- Custom URL and count:
 
   ```bash
-  ./test_api.sh http://0.0.0.0:8000/api/test/ 50
+  ./test_api.sh http://0.0.0.0:8000/api/test/ 80
   ```
 
-**Example output:**
+You should see `status=200` until the limit is hit, then `status=429`.
 
-```
-Testing: http://0.0.0.0:8000/api/test/
-Requests: 50
----
-[  1]  status=200 time=0.012s
-[  2]  status=200 time=0.008s
-...
-[ 61]  status=429 time=0.005s
----
-Done.
-```
+## Summary
 
-Once the rate limit is exceeded, you should see `status=429`. Limits are controlled by `RATE_LIMIT_REQUESTS` and `RATE_LIMIT_WINDOW` (see backend config).
+| Step | Command |
+|------|---------|
+| Install deps | `cd backend && uv sync` |
+| Start backend | `uv run python main.py` |
+| Test | From repo root: `./test_api.sh` |
 
-## Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RATE_LIMIT_REQUESTS` | 60 | Max requests per window |
-| `RATE_LIMIT_WINDOW` | 60 | Window length (seconds) |
-| `RATE_LIMIT_BACKEND` | memory | `memory` (per-worker) or `redis` (global) |
-| `REDIS_HOST` | localhost | Redis host (use `redis` in Docker) |
-| `REDIS_PORT` | 6379 | Redis port |
-| `REDIS_PASSWORD` | — | Redis password (required in Docker setup) |
-
-## Stopping
-
-```bash
-docker compose down
-```
-
-To remove the Redis data volume as well:
-
-```bash
-docker compose down -v
-```
+No Redis or Docker Compose required when using `RATE_LIMIT_BACKEND=memory` (default).
