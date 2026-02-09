@@ -1,0 +1,53 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: redis_service
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_vol:/data
+      - ./deployment/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    command: sh -c "redis-server /usr/local/etc/redis/redis.conf --requirepass \"${REDIS_PASSWORD}\""
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "sh", "-c", "redis-cli -a \"${REDIS_PASSWORD}\" --raw incr ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rate-limiter-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=${ENV:-dev}
+      - PORT=8000
+      - HOST=0.0.0.0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SERVICE_NAME=rate-limiter
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_USERNAME=${REDIS_USERNAME}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  redis_vol:
+    driver: local
+
